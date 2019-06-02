@@ -86,6 +86,10 @@ platform_do_upgrade() {
 	glinet,gl-ar300m-nor)
 		glinet_nand_nor_do_upgrade "$ARGV"
 		;;
+	glinet,gl-ar750s-nor |\
+	glinet,gl-ar750s-nor-nand)
+		nand_nor_do_upgrade "$ARGV"
+		;;
 	*)
 		nand_do_upgrade "$ARGV"
 		;;
