@@ -121,6 +121,11 @@ nand_upgrade_prepare_ubi() {
 	local has_kernel="${3:-0}"
 	local has_env="${4:-0}"
 
+	if [ -z "$rootfs_length" ] || [ "$rootfs_length" = 0 ] ; then
+		>&2 echo "ERROR: rootfs_length must be non-zero."
+		return 1
+	fi
+
 	local mtdnum="$( find_mtd_index "$CI_UBIPART" )"
 	if [ ! "$mtdnum" ]; then
 		echo "cannot find ubi mtd partition $CI_UBIPART"
@@ -195,16 +200,6 @@ nand_upgrade_prepare_ubi() {
 	return 0
 }
 
-nand_do_upgrade_success() {
-	local conf_tar="/tmp/sysupgrade.tgz"
-
-	sync
-	[ -f "$conf_tar" ] && nand_restore_config "$conf_tar"
-	echo "sysupgrade successful"
-	umount -a
-	reboot -f
-}
-
 # Flash the UBI image to MTD partition
 nand_upgrade_ubinized() {
 	local ubi_file="$1"
@@ -226,14 +221,18 @@ nand_upgrade_ubinized() {
 	sync
 	ubiformat "${mtddev}" -y -f "${ubi_file}"
 	ubiattach -p "${mtddev}"
+
 	nand_do_upgrade_success
 }
 
 # Write the UBIFS image to UBI volume
 nand_upgrade_ubifs() {
 	local rootfs_length=`(cat $1 | wc -c) 2> /dev/null`
+	local err
 
 	nand_upgrade_prepare_ubi "$rootfs_length" "ubifs" "0" "0"
+	err=$?
+	[ "$err" != 0 ] && nand_do_upgrade_abort "nand_upgrade_prepare_ubi returned '$err'"
 
 	local ubidev="$( nand_find_ubi "$CI_UBIPART" )"
 	local root_ubivol="$(nand_find_volume $ubidev $CI_ROOTPART)"
@@ -242,36 +241,85 @@ nand_upgrade_ubifs() {
 	nand_do_upgrade_success
 }
 
+nand_upgrade_tar_dir_has_assets() {
+	local tar_file="$1"
+	local board_dir="$2"
+
+	local asset
+
+	[ -z "$tar_file" ] && return 1
+
+	for asset in "${board_dir}/root" "${board_dir}/kernel" ; do
+		tar t -f "$tar_file" "$asset" | grep -Fxq "$asset" && return 0
+	done
+	return 1
+}
+
 nand_upgrade_tar() {
 	local tar_file="$1"
 	local kernel_mtd="$(find_mtd_index $CI_KERNPART)"
 
-	local board_dir=$(tar tf $tar_file | grep -m 1 '^sysupgrade-.*/$')
-	board_dir=${board_dir%/}
+	local dts_board
+	local control_file
+	local board_dir
+	local err
 
-	local kernel_length=`(tar xf $tar_file ${board_dir}/kernel -O | wc -c) 2> /dev/null`
-	local rootfs_length=`(tar xf $tar_file ${board_dir}/root -O | wc -c) 2> /dev/null`
+	dts_board="$(board_name)"
+	echo "$dts_board" | grep -Fq , && \
+		dts_board="${dts_board%%,*}_${dts_board#*,}"
 
-	local rootfs_type="$(identify_tar "$tar_file" ${board_dir}/root)"
+	control_file="sysupgrade-${dts_board}/CONTROL"
 
-	local has_kernel=1
-	local has_env=0
+	# Accomodate future CONTROL formats, as long as BOARD=board_name present
 
-	[ "$kernel_length" != 0 -a -n "$kernel_mtd" ] && {
+	board_dir="sysupgrade-$(tar x -O -f "$tar_file" "$control_file" | \
+		grep -m 1 -o -E "\bBOARD=[^[:space:]'\"]+" | \
+		cut -d = -f 2)"
+
+	if [ "$board_dir" = "sysupgrade-" ] ; then
+		>&2 echo "Unable to determine directory from '${control_file}'."
+		board_dir="sysupgrade-${dts_board}"
+	fi
+
+	if ! nand_upgrade_tar_dir_has_assets "$tar_file" "$board_dir" ; then
+		>&2 echo "No assets found for '${board_dir}/', falling back to legacy method."
+		board_dir=$(tar t -f "$tar_file" | grep -m 1 '^sysupgrade-.*/$')
+		board_dir=${board_dir%/}
+		if ! nand_upgrade_tar_dir_has_assets "$tar_file" "$board_dir" ; then
+			nand_do_upgrade_abort "No assets found for '${board_dir}/'."
+		fi
+	fi
+
+	>&2 echo "Assets from '${board_dir}/'."
+
+	local kernel_length=$( (tar xf "$tar_file" "${board_dir}/kernel" -O | wc -c) 2> /dev/null )
+	local rootfs_length=$( (tar xf "$tar_file" "${board_dir}/root" -O | wc -c) 2> /dev/null )
+
+	local rootfs_type="$(identify_tar "$tar_file" "${board_dir}/root")"
+
+	local has_ubi_kernel=1
+	local has_ubi_env=0
+
+	[ "$kernel_length" = 0 ] || [ -n "$kernel_mtd" ] && has_ubi_kernel=0
+
+	nand_upgrade_prepare_ubi "$rootfs_length" "$rootfs_type" "$has_ubi_kernel" "$has_ubi_env"
+	err=$?
+	[ "$err" != 0 ] && nand_do_upgrade_abort "nand_upgrade_prepare_ubi returned '$err'"
+
+	if [ "$kernel_length" != 0 ] && [ -n "$kernel_mtd" ] ; then
 		tar xf $tar_file ${board_dir}/kernel -O | mtd write - $CI_KERNPART
-	}
-	[ "$kernel_length" = 0 -o ! -z "$kernel_mtd" ] && has_kernel=0
+	fi
 
-	nand_upgrade_prepare_ubi "$rootfs_length" "$rootfs_type" "$has_kernel" "$has_env"
+	local ubidev="$(nand_find_ubi $CI_UBIPART)"
 
-	local ubidev="$( nand_find_ubi "$CI_UBIPART" )"
-	[ "$has_kernel" = "1" ] && {
+	if [ "$has_ubi_kernel" = "1" ] ; then
 		local kern_ubivol="$(nand_find_volume $ubidev $CI_KERNPART)"
 		tar xf $tar_file ${board_dir}/kernel -O | \
 			ubiupdatevol /dev/$kern_ubivol -s $kernel_length -
-	}
+	fi
 
 	local root_ubivol="$(nand_find_volume $ubidev $CI_ROOTPART)"
+
 	tar xf $tar_file ${board_dir}/root -O | \
 		ubiupdatevol /dev/$root_ubivol -s $rootfs_length -
 
@@ -279,6 +327,7 @@ nand_upgrade_tar() {
 }
 
 # Recognize type of passed file and start the upgrade process
+
 nand_do_upgrade() {
 	local file_type=$(identify $1)
 
@@ -289,11 +338,37 @@ nand_do_upgrade() {
 	[ ! "$(find_mtd_index "$CI_UBIPART")" ] && CI_UBIPART="rootfs"
 
 	case "$file_type" in
-		"ubi")		nand_upgrade_ubinized $1;;
-		"ubifs")	nand_upgrade_ubifs $1;;
-		*)		nand_upgrade_tar $1;;
+		"ubi")		nand_upgrade_ubinized "$1";;
+		"ubifs")	nand_upgrade_ubifs "$1";;
+		*)		nand_upgrade_tar "$1";;
 	esac
 }
+
+nand_do_upgrade_success() {
+	local conf_tar="/tmp/sysupgrade.tgz"
+
+	sync
+	[ -f "$conf_tar" ] && nand_restore_config "$conf_tar"
+	echo "sysupgrade completed"
+	umount -a
+	reboot -f
+}
+
+nand_do_upgrade_abort() {
+	>&2 echo "##### UPGRADE ABORTED: $1 #####"
+	>&2 echo "Rebooting in 5 seconds"
+	sleep 5
+	sync
+	umount -a
+	reboot -f
+}
+
+
+
+
+###
+### Use of image metadata and checks is highly encouraged over this "legacy" routine
+###
 
 # Check if passed file is a valid one for NAND sysupgrade. Currently it accepts
 # 3 types of files:
