@@ -409,6 +409,7 @@ TARGET_DEVICES += glinet_gl-ar150
 
 define Device/glinet_gl-ar300m-common-nor
   ATH_SOC := qca9531
+  DEVICE_VENDOR := GL.iNet
   DEVICE_PACKAGES := kmod-usb-core kmod-usb2
   IMAGE_SIZE := 16000k
   SUPPORTED_DEVICES += gl-ar300m
@@ -416,27 +417,16 @@ endef
 
 define Device/glinet_gl-ar300m-lite
   $(Device/glinet_gl-ar300m-common-nor)
-  DEVICE_VENDOR := GL.iNet
-  DEVICE_MODEL := GL-AR300M-Lite
+  DEVICE_MODEL := GL-AR300M
+  DEVICE_VARIANT := Lite
 endef
 TARGET_DEVICES += glinet_gl-ar300m-lite
 
-define Device/glinet_gl-ar300m-nor
+define Device/glinet_gl-ar300m16
   $(Device/glinet_gl-ar300m-common-nor)
-  DEVICE_VENDOR := GL.iNet
-  DEVICE_MODEL := GL-AR300M
+  DEVICE_MODEL := GL-AR300M16
 endef
-TARGET_DEVICES += glinet_gl-ar300m-nor
-
-define Device/glinet_gl-ar750s
-  ATH_SOC := qca9563
-  DEVICE_VENDOR := GL.iNet
-  DEVICE_MODEL := GL-AR750S
-  DEVICE_PACKAGES := kmod-usb2 kmod-ath10k-ct ath10k-firmware-qca9887-ct block-mount
-  IMAGE_SIZE := 16000k
-  SUPPORTED_DEVICES += gl-ar750s
-endef
-TARGET_DEVICES += glinet_gl-ar750s
+TARGET_DEVICES += glinet_gl-ar300m16
 
 define Device/glinet_gl-x750
   ATH_SOC := qca9531

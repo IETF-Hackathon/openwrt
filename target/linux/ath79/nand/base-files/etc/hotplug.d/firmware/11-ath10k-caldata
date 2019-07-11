@@ -1,0 +1,24 @@
+#!/bin/sh
+
+[ -e /lib/firmware/$FIRMWARE ] && exit 0
+
+. /lib/functions.sh
+. /lib/functions/system.sh
+. /lib/functions/ath10k-caldata.sh
+
+board=$(board_name)
+
+case "$FIRMWARE" in
+"ath10k/cal-pci-0000:00:00.0.bin")
+	case $board in
+	glinet,gl-ar750s-nor |\
+	glinet,gl-ar750s-nor-nand)
+		ath10kcal_extract "art" 20480 2116
+		ath10kcal_patch_mac $(macaddr_add $(mtd_get_mac_binary art 0) +1)
+		;;
+	esac
+	;;
+*)
+	exit 1
+	;;
+esac
