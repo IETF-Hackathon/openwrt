@@ -1,0 +1,5 @@
+interface br-lan service.home.arpa
+publish-addr 192.168.8.1
+udp-port 53
+tcp-port 53
+tls-port 853
