@@ -37,7 +37,7 @@ endef
 
 define Build/Prepare
 	mkdir -p $(PKG_BUILD_DIR)/mDNSResponder
-	(cd /Users/elemon/104hackathon/mDNSResponder; tar --exclude objects --exclude build --exclude .git --exclude .depfile\* -c -f - .) |(cd $(PKG_BUILD_DIR)/mDNSResponder; tar xf -)
+	(cd ${HOME}/104hackathon/mDNSResponder; tar --exclude objects --exclude build --exclude .git --exclude .depfile\* -c -f - .) |(cd $(PKG_BUILD_DIR)/mDNSResponder; tar xf -)
 endef
 
 # I have no idea why -lc is required, but without it, C library symbols are
@@ -87,6 +87,8 @@ define Package/dnssd-proxy/install
 	$(INSTALL_DIR) $(1)/etc/dnssd-proxy/
 	$(INSTALL_CONF) ./files/dnssd-proxy.cf $(1)/etc/
 	$(INSTALL_BIN) ./files/dnssd-proxy.init $(1)/etc/init.d/dnssd-proxy
+	$(INSTALL_BIN) ./files/udhcpc.user $(1)/etc/
+	$(INSTALL_BIN) ./files/odhcp6c.user $(1)/etc/
 	$(CP) $(PKG_INSTALL_DIR)/usr/sbin/dnssd-proxy $(1)/usr/sbin/
 	$(INSTALL_DIR) $(1)/etc
 endef

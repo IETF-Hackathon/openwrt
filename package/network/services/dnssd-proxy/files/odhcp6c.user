@@ -1,0 +1,23 @@
+state=$2
+interface=$1
+addrs=""
+comma=""
+#echo $ADDRESSES >/tmp/odhcp6c.$$
+for address in $ADDRESSES; do
+  #echo address: $address >>/tmp/odhcp6c.$$
+  set `echo $address |sed -e 's/,/ /g'`
+  #echo split: $* >>/tmp/odhcp6c.$$
+  address=$1
+  preferred=$2
+  valid=$3
+  set `echo $address |sed -e 's/\// /g'`
+  #echo split: $* >>/tmp/odhcp6c.$$
+  address=$1
+  preflen=$2
+  addrs="$addrs$comma { \"address\": \"$address\", \"prefix-width\": $preflen, \"preferred\": $preferred, \"valid\": $valid }"
+  comma=","
+  #echo addrs: $addrs >>/tmp/odhcp6c.$$
+done
+ubus send ipv6 '{ "state": "'$state'", "interface": "'$state'", "addresses": ['"$addrs"' ], "dns": "'$RDNSS'" }' \
+		>>/tmp/odhcp6c.$$ 2>&1
+#(env; echo " $*" ) >>/tmp/odhcp6c.$$

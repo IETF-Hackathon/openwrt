@@ -1,0 +1,1 @@
+ubus send ipv4 '{ "state": "'$1'", "interface": "'$interface'", "address": "'$ip'", "netmask": "'$netmask'", "dns": "'$dns'"  }'
