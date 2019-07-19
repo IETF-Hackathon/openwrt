@@ -1,0 +1,22 @@
+--- ubus/CMakeLists.txt	2018-10-06 18:40:24.000000000 +0000
++++ ubus/CMakeLists.txt	2019-07-19 00:32:38.689777376 +0000
+@@ -25,6 +25,7 @@
+ INCLUDE_DIRECTORIES(${ubox_include_dir})
+ 
+ ADD_LIBRARY(ubus SHARED libubus.c libubus-io.c libubus-obj.c libubus-sub.c libubus-req.c libubus-acl.c)
++ADD_LIBRARY(ubuss STATIC libubus.c libubus-obj.c libubus-sub.c libubus-req.c libubus-acl.c)
+ TARGET_LINK_LIBRARIES(ubus ${ubox_library})
+ 
+ find_library(json NAMES json-c json)
+@@ -41,10 +42,11 @@
+ 
+ INSTALL(TARGETS ubus cli
+ 	LIBRARY DESTINATION lib
+ 	RUNTIME DESTINATION bin
+ )
+ INSTALL(TARGETS ubusd
+ 	RUNTIME DESTINATION sbin
+ )
++INSTALL(TARGETS ubuss ARCHIVE DESTINATION lib)
+ 
+ INSTALL(FILES ubusmsg.h ubus_common.h libubus.h DESTINATION include)
