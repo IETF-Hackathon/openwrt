@@ -9,35 +9,82 @@
 
 include $(TOPDIR)/rules.mk
 
-PKG_NAME:=dnssd-relay
+PKG_NAME:=dnssd
 PKG_RELEASE:=5
 PKG_LICENSE:=Apache-2.0
-PKG_BUILD_DIR:=$(BUILD_DIR)/dnssd-proxy
 PKG_BUILD_PARALLEL:=0
 PKG_INSTALL:=1
+PKG_LICENSE:=Apache-v2
+PKG_SOURCE_PROTO:=git
+PKG_SOURCE_URL:=https://github.com/IETF-Hackathon/mDNSResponder
+PKG_MIRROR_HASH:=58af19d1450b85b34c760cf331fd683ce6f050a1a51583b058d8f0b45f913486
+PKG_SOURCE_DATE:=2019-07-20
+PKG_SOURCE_VERSION:=2bc56babbcaf2001e006d65aabca7c7bdf02cd10
+PKG_SOURCE_TAG:=2bc56bab
+PKG_BUILD_DIR:=$(BUILD_DIR)/$(PKG_NAME)/$(PKG_NAME)-$(PKG_SOURCE_DATE)-$(PKG_SOURCE_TAG)
 
 PKG_MAINTAINER:=Ted Lemon <mellon@fugue.com>
 
 include $(INCLUDE_DIR)/package.mk
 
+define Package/dnssd/Default
+  SECTION:=net
+  TITLE:=DNSSD
+  CATEGORY:=Network
+  SUBMENU:=IP Addresses and Names
+  DEPENDS:=libc +libmbedtls +mDNSResponder
+endef
+
 define Package/dnssd-proxy
+  $(call Package/dnssd/Default)
+  TITLE+= Discovery Proxy
+endef
+
+define Package/dns-sd
+  SECTION:=net
+  CATEGORY:=Network
+  SUBMENU:=IP Addresses and Names
+  TITLE+= Discovery Proxy Command Line Tool
+  DEPENDS:=libc +libmbedtls
+endef
+
+define Package/mDNSResponder
   SECTION:=net
   CATEGORY:=Network
   SUBMENU:=IP Addresses and Names
   TITLE:=DNSSD Discovery Proxy
-  DEPENDS:=libc +libmbedtls +mDNSResponder
+  DEPENDS:=libc +libmbedtls
+endef
+
+define Package/dnssd/Default/description
+   DNSSD (DNS Service Discovery) is a collection of protocols that allow services to
+   advertise their existence and their contact details.  Clients can then discover
+   services
 endef
 
 define Package/dnssd-proxy/description
+   $(call Package/dnssd/Default/description)
+
    DNSSD-Proxy is a reference implementation of the IETF DNS Service Discovery Proxy.
    The Discovery Proxy proxies multicast DNS service from one network to another using
    the DNS protocol.   This allows devices on one link to discover services on another
    link.
 endef
 
-define Build/Prepare
-	mkdir -p $(PKG_BUILD_DIR)/mDNSResponder
-	(cd ${HOME}/104hackathon/mDNSResponder; tar --exclude objects --exclude build --exclude .git --exclude .depfile\* -c -f - .) |(cd $(PKG_BUILD_DIR)/mDNSResponder; tar xf -)
+define Package/dns-sd/description
+   $(call Package/dnssd/Default/description)
+
+   dns-sd is a command line tool for querying the agent when it is running.
+endef
+
+
+define Package/mDNSResponder/description
+   $(call Package/dnssd/Default/description)
+
+   mDNSResponder is the Apple implementation of a DNSSD service discovery agent.   It
+   can be used to discover services both on the local link using the Multicast DNS
+   protocol, and on both local and non-local links using the DNS protocol.  It can
+   also be used to publish services on the local link.
 endef
 
 # I have no idea why -lc is required, but without it, C library symbols are
@@ -55,13 +102,13 @@ MAKE_FLAGS += \
 	STARTUPSCRIPTDIR="$(PKG_INSTALL_DIR)/etc/init.d" \
 	RUNLEVELSCRIPTSDIR="$(PKG_INSTALL_DIR)/etc/rc.d" \
 	os=linux-uclibc
-MAKE_PATH = mDNSResponder/ServiceRegistration
+MAKE_PATH = mDNSResponder/mDNSPosix
 
 TARGET_CFLAGS += -ggdb3 -g -O0
 
 define Build/Compile
 	$(call Build/Compile/Default)
-	# XXX: mDNSResponder's "make install" does not seem to create:
+    # XXX: mDNSResponder's "make install" does not seem to create:
 	mkdir -p $(PKG_INSTALL_DIR)/lib/
 	mkdir -p $(PKG_INSTALL_DIR)/usr/bin/
 	mkdir -p $(PKG_INSTALL_DIR)/usr/sbin/
@@ -93,4 +140,25 @@ define Package/dnssd-proxy/install
 	$(INSTALL_DIR) $(1)/etc
 endef
 
+define Package/dns-sd/install
+	$(INSTALL_DIR) $(1)/usr/bin/
+	$(INSTALL_DIR) $(1)/usr/lib/
+	$(CP) $(PKG_INSTALL_DIR)/usr/bin/dns-sd $(1)/usr/bin/
+	$(CP) $(PKG_INSTALL_DIR)/usr/lib/libdns_sd.so.1 $(1)/usr/lib/libdns_sd.so.1.0.0
+	(cd $(1)/usr/lib && \
+	 ln -s libdns_sd.so.1.0.0 libdns_sd.so.1 && \
+	 ln -s libdns_sd.so.1.0.0 libdns_sd.so)
+endef
+
+define Package/mDNSResponder/install
+	$(INSTALL_DIR) $(1)/usr/sbin/
+	$(INSTALL_DIR) $(1)/etc/
+	$(INSTALL_DIR) $(1)/etc/init.d
+	$(INSTALL_BIN) ./files/mDNSResponder.init $(1)/etc/init.d/mDNSResponder
+	$(CP) $(PKG_INSTALL_DIR)/usr/sbin/mdnsd $(1)/usr/sbin/
+	$(INSTALL_DIR) $(1)/etc
+endef
+
 $(eval $(call BuildPackage,dnssd-proxy))
+$(eval $(call BuildPackage,dns-sd))
+$(eval $(call BuildPackage,mDNSResponder))
