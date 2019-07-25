@@ -17,10 +17,10 @@ PKG_INSTALL:=1
 PKG_LICENSE:=Apache-v2
 PKG_SOURCE_PROTO:=git
 PKG_SOURCE_URL:=https://github.com/IETF-Hackathon/mDNSResponder
-PKG_MIRROR_HASH:=58af19d1450b85b34c760cf331fd683ce6f050a1a51583b058d8f0b45f913486
-PKG_SOURCE_DATE:=2019-07-20
-PKG_SOURCE_VERSION:=2bc56babbcaf2001e006d65aabca7c7bdf02cd10
-PKG_SOURCE_TAG:=2bc56bab
+PKG_MIRROR_HASH:=06026f98263a3a1cb4caa1ce055a6c898f3777c7d9fb0290f8b868bc269b516e
+PKG_SOURCE_DATE:=2019-07-24
+PKG_SOURCE_VERSION:=4b0bcbaa0e80110385dd9f744a7b3f77984194f4
+PKG_SOURCE_TAG:=4b0bcbaa
 PKG_BUILD_DIR:=$(BUILD_DIR)/$(PKG_NAME)/$(PKG_NAME)-$(PKG_SOURCE_DATE)-$(PKG_SOURCE_TAG)
 
 PKG_MAINTAINER:=Ted Lemon <mellon@fugue.com>
@@ -32,12 +32,12 @@ define Package/dnssd/Default
   TITLE:=DNSSD
   CATEGORY:=Network
   SUBMENU:=IP Addresses and Names
-  DEPENDS:=libc +libmbedtls +mDNSResponder
 endef
 
 define Package/dnssd-proxy
   $(call Package/dnssd/Default)
   TITLE+= Discovery Proxy
+  DEPENDS:=libc +libmbedtls +mDNSResponder +mbedtls-write +mbedtls-util
 endef
 
 define Package/dns-sd
@@ -95,6 +95,9 @@ MAKE_FLAGS += \
         DEBUG=1 \
 	LINKOPTS=-lc \
 	LDCONFIG= \
+    RESOLVCONF='\"/tmp/resolv.conf.auto\"' \
+    CERTWRITE_PROGRAM='\"/usr/bin/cert_write\"' \
+    GENKEY_PROGRAM='\"/usr/bin/gen_key\"' \
 	ETCBASE="$(PKG_INSTALL_DIR)/etc" \
 	INSTBASE="$(PKG_INSTALL_DIR)/usr" \
 	NSSINSTPATH="$(PKG_INSTALL_DIR)/lib" \
@@ -125,6 +128,12 @@ define Build/Compile
 	mkdir -p $(PKG_INSTALL_DIR)/etc/rc.d/rc5.d/
 	mkdir -p $(PKG_INSTALL_DIR)/etc/rc.d/rc0.d/
 	mkdir -p $(PKG_INSTALL_DIR)/etc/rc.d/rc6.d/
+endef
+
+define Package/dnssd-proxy/conffiles
+/etc/dnssd-proxy.cf
+/etc/dnssd-proxy/server.crt
+/etc/dnssd-proxy/server.key
 endef
 
 define Package/dnssd-proxy/install
